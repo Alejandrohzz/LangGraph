@@ -43,6 +43,7 @@ def montar(monkeypatch):
     def _montar(decisiones):
         llamados = []
         sint = SintetizadorFalso()
+        monkeypatch.setattr(grafo, "MOSTRAR_DATOS_VERIFICADOS", False)
         monkeypatch.setattr(grafo, "modelo_supervisor", SupervisorFalso(decisiones))
         monkeypatch.setattr(grafo, "modelo_sintetizador", sint)
         for n in ("clima", "presupuesto", "reservas"):
@@ -167,3 +168,43 @@ def test_nodo_reservas_deja_claro_que_no_se_reservo():
     salida = grafo.crear_nodo_especialista("reservas", AgenteSinReserva())(grafo.estado_inicial("x"))
     assert "No se creó ninguna reserva." in salida["resultados"][0]
     assert "Reservé todo" not in salida["resultados"][0]
+
+
+def test_no_reserva_si_el_presupuesto_no_alcanza(monkeypatch):
+    llamados = []
+
+    def presupuesto(_estado):
+        llamados.append("presupuesto")
+        return {"resultados": ["[presupuesto] No alcanza: presupuesto $150.000 - costo $210.000 = faltan $60.000."],
+                "consultados": ["presupuesto"]}
+
+    sint = SintetizadorFalso()
+    monkeypatch.setattr(grafo, "modelo_supervisor", SupervisorFalso(["presupuesto", "reservas"]))
+    monkeypatch.setattr(grafo, "modelo_sintetizador", sint)
+    monkeypatch.setattr(grafo, "nodo_presupuesto", presupuesto)
+    monkeypatch.setattr(grafo, "nodo_clima", nodo_falso("clima", llamados))
+    monkeypatch.setattr(grafo, "nodo_reservas", nodo_falso("reservas", llamados))
+    estado = grafo.construir_grafo().invoke(
+        grafo.estado_inicial("Somos 3 con 150000. Si nos alcanza, reserva Suesca a nombre de Laura."))
+    assert llamados == ["presupuesto"]  # reservas NUNCA se ejecuta
+    assert any("No se creó ninguna reserva" in r for r in estado["resultados"])
+    assert "No se creó ninguna reserva" in sint.mensajes[1][1]  # el sintetizador lo ve
+
+
+def test_prompt_del_sintetizador_pide_datos_concretos():
+    assert "probabilidad de lluvia" in grafo.PROMPT_SINTETIZADOR and "NO se creó" in grafo.PROMPT_SINTETIZADOR
+
+
+def test_respuesta_final_incluye_los_datos_verificados(montar, monkeypatch):
+    app, _, _ = montar(["clima", "fin"])
+    monkeypatch.setattr(grafo, "MOSTRAR_DATOS_VERIFICADOS", True)
+    estado = app.invoke(grafo.estado_inicial("pregunta"))
+    assert estado["respuesta_final"].startswith("RESPUESTA FINAL")
+    assert "Datos verificados por las herramientas:" in estado["respuesta_final"]
+    assert "- [clima] listo" in estado["respuesta_final"]
+
+
+def test_sin_resultados_no_hay_bloque_de_datos(montar, monkeypatch):
+    app, _, _ = montar(["fin"])
+    monkeypatch.setattr(grafo, "MOSTRAR_DATOS_VERIFICADOS", True)
+    assert app.invoke(grafo.estado_inicial("¿Quién ganó el mundial?"))["respuesta_final"] == "RESPUESTA FINAL"

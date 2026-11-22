@@ -4,26 +4,35 @@ Verificación automática = ayuda; las observaciones se completan a mano.
 
 | # | Agentes que llamó el supervisor | ¿Respuesta correcta? (auto) | Tiempo (s) | Observaciones |
 |---|---|---|---|---|
-| 3 | clima, presupuesto | Sí | 282 |  |
+| 4 | clima, presupuesto, reservas | Sí | 156 |  |
 
-## Pregunta 3
-**Pregunta:** Somos 2 y queremos ir a Villa de Leyva el sábado. ¿Cómo estará el clima y cuánto nos cuesta?
+## Pregunta 4
+**Pregunta:** Somos 3 y tenemos 250000. Si no llueve mucho y nos alcanza, reserva Suesca para el sábado a nombre de Laura.
 
-**Respuesta final:** El clima para Villa de Leyva el sábado será soleado con temperaturas entre 12°C y 25°C y probabilidad de lluvia del 5%. Para 2 personas, el costo estimado es de $230.000.
+**Respuesta final:** Sobran $40.000. Reserva confirmada para Laura en Suesca para el sábado. Código de reserva: RES-001.
+
+Datos verificados por las herramientas:
+- [clima] Rocas de Suesca el sabado: soleado, entre 7 °C y 21 °C, probabilidad de lluvia 15 %.
+- [presupuesto] Rocas de Suesca: por persona transporte $25.000 + entrada $15.000 + alimentación $30.000 = $70.000. Costo total para 3 personas: $210.000. Sí alcanza: presupuesto $250.000 - costo $210.000 = sobran $40.000.
+- [reservas] Rocas de Suesca el sabado: quedan 8 cupos. Reserva confirmada RES-001: Rocas de Suesca, sabado, 3 personas, a nombre de Laura.
 
 **Verificaciones:**
-- ✅ llamó a clima y presupuesto
-- ✅ dice soleado
-- ✅ dice 5 %
-- ✅ costo $230.000
+- ✅ llamó a clima, presupuesto y reservas
+- ✅ dice 15 %
+- ✅ costo $210.000
+- ✅ sobran $40.000
+- ✅ creó exactamente 1 reserva
+- ✅ muestra el código RES-
 
 **Traza:**
 ```
-[supervisor] -> clima (El usuario preguntó por el clima y el costo. No se han consultado los agentes correspondientes.)
-  [clima] El sábado estará soleado en Villa de Leyva con temperaturas entre 12°C y 25°C. No necesitarás un impermeable. El costo es gratis.
-  [clima] datos de las herramientas: Villa de Leyva el sabado: soleado, entre 12 °C y 25 °C, probabilidad de lluvia 5 %.
-  [supervisor] -> presupuesto (El usuario preguntó por el costo, por lo que primero debe consultarse el presupuesto.)
-  [presupuesto] Respuesta del planificador: El clima será soleado con temperaturas entre 12 °C y 25 °C. El costo total para 2 personas será $230.000.
-  [presupuesto] datos de las herramientas: Villa de Leyva: por persona transporte $70.000 + entrada $0 + alimentación $45.000 = $115.000. Costo total para 2 personas: $230.000.
-  [supervisor] -> presupuesto (El presupuesto aún no ha sido consultado)
+[supervisor] -> clima (Necesita saber si llueve mucho para reservar Suesca.)
+  [clima] Reserva ropa ligera y cómoda para el sábado.
+  [clima] datos de las herramientas: Rocas de Suesca el sabado: soleado, entre 7 °C y 21 °C, probabilidad de lluvia 15 %.
+  [supervisor] -> presupuesto (El presupuesto debe ser evaluado antes de reservar)
+  [presupuesto] Costo total: $210.000. Sobran $40.000.
+  [presupuesto] datos de las herramientas: Rocas de Suesca: por persona transporte $25.000 + entrada $15.000 + alimentación $30.000 = $70.000. Costo total para 3 personas: $210.000. | Sí alcanza: presupuesto $250.000 - costo $210.000 = sobran $40.000.
+  [supervisor] -> reservas (El usuario pidió reservar Suesca para el sábado a nombre de Laura. Los resultados de los otros agentes son suficientes para responder a esta solicitud.)
+  [reservas] RES-001: Rocas de Suesca, sábado, 3 personas, a nombre de Laura.
+  [reservas] datos de las herramientas: Rocas de Suesca el sabado: quedan 8 cupos. | Reserva confirmada RES-001: Rocas de Suesca, sabado, 3 personas, a nombre de Laura.
 ```

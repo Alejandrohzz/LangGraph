@@ -22,7 +22,7 @@ from langgraph.graph import END, START, StateGraph
 
 import datos
 from agentes import agente_clima, agente_presupuesto, agente_reservas, crear_modelo
-from config import MAX_PASOS
+from config import MAX_PASOS, MOSTRAR_DATOS_VERIFICADOS
 
 
 # ----------------------------------------------------------------------------
@@ -70,7 +70,10 @@ PROMPT_SINTETIZADOR = """Eres el asistente final de un planeador de salidas de f
 Redacta la respuesta para el usuario usando SOLO los resultados de los agentes.
 - No inventes datos que no estén en los resultados.
 - Organiza la respuesta en un párrafo corto o en viñetas, en español y con tono amable.
-- Si se hizo una reserva, muestra el código.
+- Incluye siempre los datos concretos de los resultados: probabilidad de lluvia en %, costo total,
+  cuánto sobra o falta, cupos y código de reserva.
+- Si se hizo una reserva, muestra el código. Si un resultado dice que NO se creó una reserva,
+  dilo claramente y explica el motivo.
 - Si no hay resultados, explica que puedes ayudar con clima, presupuesto y reservas
   para Guatavita, Zipaquirá, Villa de Leyva, Suesca y Chicaque."""
 
@@ -93,6 +96,11 @@ def _pide_reservar(pregunta: str) -> bool:
     return "reserv" in datos.normalizar(pregunta)
 
 
+def _presupuesto_no_alcanza(estado: EstadoPlaneador) -> bool:
+    """True si calcular_saldo (vía el agente de presupuesto) dijo que el dinero no alcanza."""
+    return any(r.startswith("[presupuesto]") and "No alcanza" in r for r in estado["resultados"])
+
+
 def nodo_supervisor(estado: EstadoPlaneador) -> dict:
     consultados = estado["consultados"]
     if len(consultados) >= MAX_PASOS:  # límite de autonomía
@@ -113,6 +121,11 @@ def nodo_supervisor(estado: EstadoPlaneador) -> dict:
     if siguiente == "reservas" and not _pide_reservar(estado["pregunta"]):
         print("  [supervisor] el usuario no pidió reservar; se pasa a la respuesta final")
         siguiente = "fin"
+    if siguiente == "reservas" and _presupuesto_no_alcanza(estado):
+        # Guardia determinista: nunca se reserva si el presupuesto no alcanza, decida lo que decida el modelo.
+        print("  [supervisor] el presupuesto no alcanza; NO se llama al agente de reservas")
+        return {"siguiente": "fin",
+                "resultados": ["[sistema] No se creó ninguna reserva porque el presupuesto no alcanza."]}
     return {"siguiente": siguiente}
 
 
@@ -147,7 +160,11 @@ nodo_reservas = crear_nodo_especialista("reservas", agente_reservas)
 
 def nodo_sintetizador(estado: EstadoPlaneador) -> dict:
     respuesta = modelo_sintetizador.invoke([("system", PROMPT_SINTETIZADOR), ("human", _contexto(estado))])
-    return {"respuesta_final": respuesta.content}
+    texto = respuesta.content
+    if MOSTRAR_DATOS_VERIFICADOS and estado["resultados"]:
+        # Evidencia: los datos exactos que produjeron las herramientas (no el texto del modelo).
+        texto += "\n\nDatos verificados por las herramientas:\n" + "\n".join(f"- {r}" for r in estado["resultados"])
+    return {"respuesta_final": texto}
 
 
 # ----------------------------------------------------------------------------

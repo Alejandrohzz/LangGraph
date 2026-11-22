@@ -17,3 +17,8 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 # Límite de autonomía: cuántos agentes especialistas puede llamar el supervisor
 # antes de pasar obligatoriamente a la respuesta final.
 MAX_PASOS = 3
+
+# Si es True, la respuesta final termina con la lista de "Datos verificados por las herramientas".
+# Los modelos pequeños a veces omiten cifras al redactar (p. ej. el % de lluvia); este bloque las
+# garantiza porque sale directo del código, no del modelo. Ponlo en False para respuestas más cortas.
+MOSTRAR_DATOS_VERIFICADOS = True
