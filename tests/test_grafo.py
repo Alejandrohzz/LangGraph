@@ -3,7 +3,11 @@ por dobles de prueba para verificar el enrutamiento, los reducers y los límites
 import pytest
 
 import grafo
+from ejecutar_pruebas import PREGUNTAS
 from grafo import Decision
+
+
+CLIMA = "¿Cómo estará el clima?"
 
 
 class SupervisorFalso:
@@ -54,7 +58,7 @@ def montar(monkeypatch):
 
 def test_pregunta_3_clima_y_presupuesto(montar):
     app, llamados, _ = montar(["clima", "presupuesto", "fin"])
-    estado = app.invoke(grafo.estado_inicial("pregunta"))
+    estado = app.invoke(grafo.estado_inicial(CLIMA))
     assert llamados == ["clima", "presupuesto"]
     assert estado["consultados"] == ["clima", "presupuesto"]          # el reducer acumula
     assert len(estado["resultados"]) == 2
@@ -72,7 +76,7 @@ def test_pregunta_4_tres_especialistas_y_limite_de_autonomia(montar):
 def test_limite_configurable(montar, monkeypatch):
     monkeypatch.setattr(grafo, "MAX_PASOS", 1)
     app, llamados, _ = montar(["clima", "presupuesto"])
-    app.invoke(grafo.estado_inicial("pregunta"))
+    app.invoke(grafo.estado_inicial(CLIMA))
     assert llamados == ["clima"]
 
 
@@ -86,14 +90,14 @@ def test_pregunta_6_fuera_de_tema_no_llama_especialistas(montar):
 
 def test_no_repite_especialistas(montar):
     app, llamados, _ = montar(["clima", "clima"])
-    estado = app.invoke(grafo.estado_inicial("pregunta"))
+    estado = app.invoke(grafo.estado_inicial(CLIMA))
     assert llamados == ["clima"]
     assert estado["consultados"] == ["clima"]
 
 
 def test_decision_invalida_finaliza_de_forma_segura(montar):
     app, llamados, _ = montar([ValueError("JSON inválido")])
-    estado = app.invoke(grafo.estado_inicial("pregunta"))
+    estado = app.invoke(grafo.estado_inicial(CLIMA))
     assert llamados == []
     assert estado["respuesta_final"] == "RESPUESTA FINAL"
 
@@ -118,7 +122,8 @@ def test_nodo_especialista_envuelve_un_agente():
 
     nodo = grafo.crear_nodo_especialista("clima", AgenteFalso())
     salida = nodo(grafo.estado_inicial("hola"))
-    assert salida == {"resultados": ["[clima] respuesta del agente"], "consultados": ["clima"]}
+    assert salida == {"resultados": [f"[clima] {grafo.SIN_HERRAMIENTAS} respuesta del agente"],
+                      "consultados": ["clima"]}
 
 
 def test_mermaid_contiene_los_cinco_nodos():
@@ -147,7 +152,7 @@ def test_nodo_especialista_guarda_los_datos_de_las_herramientas():
 
 def test_supervisor_ve_que_agentes_le_quedan(montar):
     app, _, _ = montar(["clima", "fin"])
-    app.invoke(grafo.estado_inicial("pregunta"))
+    app.invoke(grafo.estado_inicial(CLIMA))
     assert "todavía puedes elegir: presupuesto, reservas" in grafo.modelo_supervisor.ultimo
 
 
@@ -198,7 +203,7 @@ def test_prompt_del_sintetizador_pide_datos_concretos():
 def test_respuesta_final_incluye_los_datos_verificados(montar, monkeypatch):
     app, _, _ = montar(["clima", "fin"])
     monkeypatch.setattr(grafo, "MOSTRAR_DATOS_VERIFICADOS", True)
-    estado = app.invoke(grafo.estado_inicial("pregunta"))
+    estado = app.invoke(grafo.estado_inicial(CLIMA))
     assert estado["respuesta_final"].startswith("RESPUESTA FINAL")
     assert "Datos verificados por las herramientas:" in estado["respuesta_final"]
     assert "- [clima] listo" in estado["respuesta_final"]
@@ -208,3 +213,25 @@ def test_sin_resultados_no_hay_bloque_de_datos(montar, monkeypatch):
     app, _, _ = montar(["fin"])
     monkeypatch.setattr(grafo, "MOSTRAR_DATOS_VERIFICADOS", True)
     assert app.invoke(grafo.estado_inicial("¿Quién ganó el mundial?"))["respuesta_final"] == "RESPUESTA FINAL"
+
+
+@pytest.mark.parametrize("numero,pregunta,_v", PREGUNTAS)
+def test_filtro_de_dominio_con_las_seis_preguntas(numero, pregunta, _v):
+    assert grafo._es_del_dominio(pregunta) == (numero != 6)
+
+
+def test_pregunta_fuera_de_tema_ni_siquiera_consulta_al_supervisor(montar):
+    app, llamados, _ = montar([])  # si se llamara al supervisor, fallaría (lista vacía)
+    estado = app.invoke(grafo.estado_inicial("¿Quién ganó el mundial de 2022?"))
+    assert llamados == [] and grafo.modelo_supervisor.llamadas == 0
+    assert estado["respuesta_final"] == "RESPUESTA FINAL"
+
+
+def test_el_bloque_de_datos_excluye_lo_que_no_vino_de_herramientas(monkeypatch):
+    monkeypatch.setattr(grafo, "modelo_sintetizador", SintetizadorFalso())
+    estado = grafo.estado_inicial("x")
+    estado["resultados"] = [f"[clima] {grafo.SIN_HERRAMIENTAS} puro texto del modelo",
+                            "[presupuesto] Costo total: $230.000."]
+    texto = grafo.nodo_sintetizador(estado)["respuesta_final"]
+    assert "- [presupuesto] Costo total: $230.000." in texto
+    assert "puro texto del modelo" not in texto

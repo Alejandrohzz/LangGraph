@@ -49,6 +49,8 @@ class Decision(BaseModel):
     motivo: str = Field(description="Explicación breve de la decisión.")
 
 
+SIN_HERRAMIENTAS = "(sin datos de herramientas)"
+
 PROMPT_SUPERVISOR = """Eres el SUPERVISOR de un planeador de salidas de fin de semana cerca de Bogotá.
 Coordinas a tres agentes especialistas:
 - clima: pronóstico del tiempo de un destino para el sábado o el domingo.
@@ -90,6 +92,22 @@ def _contexto(estado: EstadoPlaneador) -> str:
 # ----------------------------------------------------------------------------
 # 3. NODOS: funciones que reciben el estado y devuelven SOLO lo que cambian.
 # ----------------------------------------------------------------------------
+# Palabras que indican que la pregunta trata de clima, dinero, reservas o de planear una salida.
+# Es un filtro de entrada barato y determinista: si no aparece ninguna (ni un destino), la pregunta
+# está fuera de tema y ni siquiera se consulta al modelo supervisor.
+PALABRAS_DOMINIO = (
+    "clima", "lluvi", "llueve", "temperatura", "pronostico", "soleado", "frio", "calor",
+    "costo", "cuesta", "cuanto", "precio", "presupuesto", "dinero", "plata", "peso", "alcanza", "gastar",
+    "reserv", "cupo", "disponib", "aparta",
+    "plan", "viaj", "salida", "paseo", "excursion", "destino", "fin de semana", "sabado", "domingo",
+)
+
+
+def _es_del_dominio(pregunta: str) -> bool:
+    t = datos.normalizar(pregunta)
+    return datos.buscar_destino(pregunta) is not None or any(p in t for p in PALABRAS_DOMINIO)
+
+
 def _pide_reservar(pregunta: str) -> bool:
     """True si el usuario habló de reservar. Crear una reserva tiene efectos, así que el sistema
     no depende solo del modelo: sin una petición explícita no se llama al agente de reservas."""
@@ -104,6 +122,9 @@ def _presupuesto_no_alcanza(estado: EstadoPlaneador) -> bool:
 def nodo_supervisor(estado: EstadoPlaneador) -> dict:
     consultados = estado["consultados"]
     if len(consultados) >= MAX_PASOS:  # límite de autonomía
+        return {"siguiente": "fin"}
+    if not consultados and not _es_del_dominio(estado["pregunta"]):
+        print("  [supervisor] pregunta fuera de tema; se responde sin consultar especialistas")
         return {"siguiente": "fin"}
     pendientes = [a for a in ("clima", "presupuesto", "reservas") if a not in consultados]
     mensaje = (_contexto(estado) +
@@ -148,7 +169,7 @@ def crear_nodo_especialista(nombre: str, agente):
         print(f"  [{nombre}] {texto}")
         if datos_herramientas:
             print(f"  [{nombre}] datos de las herramientas: {' | '.join(datos_herramientas)}")
-        guardado = " ".join(datos_herramientas) if datos_herramientas else texto
+        guardado = " ".join(datos_herramientas) if datos_herramientas else f"{SIN_HERRAMIENTAS} {texto}"
         return {"resultados": [f"[{nombre}] {guardado}"], "consultados": [nombre]}
     return nodo
 
@@ -161,9 +182,10 @@ nodo_reservas = crear_nodo_especialista("reservas", agente_reservas)
 def nodo_sintetizador(estado: EstadoPlaneador) -> dict:
     respuesta = modelo_sintetizador.invoke([("system", PROMPT_SINTETIZADOR), ("human", _contexto(estado))])
     texto = respuesta.content
-    if MOSTRAR_DATOS_VERIFICADOS and estado["resultados"]:
+    verificados = [r for r in estado["resultados"] if SIN_HERRAMIENTAS not in r]
+    if MOSTRAR_DATOS_VERIFICADOS and verificados:
         # Evidencia: los datos exactos que produjeron las herramientas (no el texto del modelo).
-        texto += "\n\nDatos verificados por las herramientas:\n" + "\n".join(f"- {r}" for r in estado["resultados"])
+        texto += "\n\nDatos verificados por las herramientas:\n" + "\n".join(f"- {r}" for r in verificados)
     return {"respuesta_final": texto}
 
 
