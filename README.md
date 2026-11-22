@@ -1,6 +1,6 @@
 # Planeador de fin de semana multiagente (LangGraph + Ollama)
 
-Taller del Módulo 3 — Universidad El Bosque. Estado actual: **Parte 4 (grafo multiagente)**.
+Taller del Módulo 3 — Universidad El Bosque. Estado actual: **Parte 5 (pruebas del sistema)**.
 
 ## Requisitos
 - Python 3.11+
@@ -45,3 +45,10 @@ pytest                      # 47 pruebas, sin Ollama (grafo con dobles de prueba
 python main.py --grafo      # imprime el grafo en Mermaid (pégalo en https://mermaid.live)
 python main.py              # chat por consola (requiere Ollama)
 ```
+
+## Parte 5: ejecutar las seis preguntas
+```powershell
+python ejecutar_pruebas.py        # las 6 preguntas -> docs/resultados_pruebas.md
+python ejecutar_pruebas.py 3 4    # solo algunas   -> docs/resultados_pruebas_parcial.md
+```
+Reinicia cupos y reservas entre preguntas, mide tiempos y guarda la traza de cada una.

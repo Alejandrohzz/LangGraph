@@ -152,15 +152,30 @@ def escribir_informe(resultados, ruta: Path) -> None:
     ruta.write_text("\n".join(lineas) + "\n", encoding="utf-8")
 
 
+def ejecutar_todas(elegidas, app, estado_inicial, ruta: Path) -> list:
+    """Ejecuta las preguntas y guarda el informe DESPUÉS DE CADA UNA (si se interrumpe con Ctrl+C
+    o algo falla, lo ya ejecutado queda guardado)."""
+    resultados = []
+    try:
+        for n, q, v in elegidas:
+            resultados.append(ejecutar_una(n, q, v, app, estado_inicial))
+            escribir_informe(resultados, ruta)
+            print(f"(informe actualizado: {ruta})")
+    except KeyboardInterrupt:
+        print("\nInterrumpido con Ctrl+C: se conserva lo ejecutado hasta ahora.")
+        if resultados:
+            escribir_informe(resultados, ruta)
+    return resultados
+
+
 def main(argv) -> None:
     from grafo import app, estado_inicial  # import tardío: carga los modelos
 
     seleccion = {int(a) for a in argv if a.isdigit()}
     elegidas = [p for p in PREGUNTAS if not seleccion or p[0] in seleccion]
-    resultados = [ejecutar_una(n, q, v, app, estado_inicial) for n, q, v in elegidas]
     ruta = Path("docs") / ("resultados_pruebas_parcial.md" if seleccion else "resultados_pruebas.md")
-    escribir_informe(resultados, ruta)
-    print(f"\nInforme guardado en {ruta}")
+    ejecutar_todas(elegidas, app, estado_inicial, ruta)
+    print(f"\nInforme en {ruta}")
 
 
 if __name__ == "__main__":

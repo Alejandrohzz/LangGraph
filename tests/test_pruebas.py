@@ -43,3 +43,21 @@ def test_pregunta_5_falla_si_reservo():
 def test_pregunta_6_sin_especialistas():
     assert ok(ep.verificar_6("Solo ayudo con salidas de fin de semana.", [], []))
     assert not ok(ep.verificar_6("...", ["clima"], []))
+
+
+def test_informe_se_guarda_aunque_se_interrumpa(tmp_path):
+    class AppFalsa:
+        def __init__(self):
+            self.n = 0
+
+        def invoke(self, _estado):
+            self.n += 1
+            if self.n == 2:
+                raise KeyboardInterrupt
+            return {"respuesta_final": "Estará lluvioso, lluvia 80 %.", "consultados": ["clima"]}
+
+    ruta = tmp_path / "docs" / "informe.md"
+    elegidas = [p for p in ep.PREGUNTAS if p[0] in (1, 2)]
+    resultados = ep.ejecutar_todas(elegidas, AppFalsa(), lambda q: {}, ruta)
+    assert len(resultados) == 1 and ruta.exists()
+    assert "Pregunta 1" in ruta.read_text(encoding="utf-8")

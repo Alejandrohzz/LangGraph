@@ -12,7 +12,8 @@ class SupervisorFalso:
         self.decisiones = list(decisiones)
         self.llamadas = 0
 
-    def invoke(self, _mensajes):
+    def invoke(self, mensajes):
+        self.ultimo = mensajes[1][1]
         self.llamadas += 1
         d = self.decisiones.pop(0)
         if isinstance(d, Exception):
@@ -62,7 +63,7 @@ def test_pregunta_3_clima_y_presupuesto(montar):
 def test_pregunta_4_tres_especialistas_y_limite_de_autonomia(montar):
     # El supervisor "quisiera" seguir, pero tras 3 especialistas se corta sin preguntarle.
     app, llamados, _ = montar(["clima", "presupuesto", "reservas"])
-    estado = app.invoke(grafo.estado_inicial("pregunta"))
+    estado = app.invoke(grafo.estado_inicial("Si nos alcanza, reserva Suesca a nombre de Laura"))
     assert llamados == ["clima", "presupuesto", "reservas"]
     assert estado["respuesta_final"] == "RESPUESTA FINAL"
 
@@ -123,3 +124,46 @@ def test_mermaid_contiene_los_cinco_nodos():
     texto = grafo.app.get_graph().draw_mermaid()
     for nodo in ("supervisor", "clima", "presupuesto", "reservas", "sintetizador"):
         assert nodo in texto
+
+
+def test_nodo_especialista_guarda_los_datos_de_las_herramientas():
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+    class AgenteConTools:
+        def invoke(self, _entrada):
+            return {"messages": [
+                HumanMessage(content="pregunta"),
+                AIMessage(content="", tool_calls=[{"name": "consultar_pronostico", "args": {}, "id": "1"}]),
+                ToolMessage(content="Villa de Leyva el sabado: soleado, lluvia 5 %.", tool_call_id="1"),
+                ToolMessage(content="Error invoking tool: Field required", tool_call_id="2", status="error"),
+                AIMessage(content="No hay mucha probabilidad de lluvia. El costo es gratis."),
+            ]}
+
+    salida = grafo.crear_nodo_especialista("clima", AgenteConTools())(grafo.estado_inicial("x"))
+    assert salida["resultados"] == ["[clima] Villa de Leyva el sabado: soleado, lluvia 5 %."]
+    assert salida["consultados"] == ["clima"]
+
+
+def test_supervisor_ve_que_agentes_le_quedan(montar):
+    app, _, _ = montar(["clima", "fin"])
+    app.invoke(grafo.estado_inicial("pregunta"))
+    assert "todavía puedes elegir: presupuesto, reservas" in grafo.modelo_supervisor.ultimo
+
+
+def test_no_llama_a_reservas_si_el_usuario_no_pidio_reservar(montar):
+    app, llamados, _ = montar(["clima", "presupuesto", "reservas"])
+    estado = app.invoke(grafo.estado_inicial("¿Cómo estará el clima y cuánto cuesta?"))
+    assert llamados == ["clima", "presupuesto"]
+    assert estado["respuesta_final"] == "RESPUESTA FINAL"
+
+
+def test_nodo_reservas_deja_claro_que_no_se_reservo():
+    class AgenteSinReserva:
+        def invoke(self, _entrada):
+            from langchain_core.messages import AIMessage, ToolMessage
+            return {"messages": [ToolMessage(content="Suesca el sabado: quedan 8 cupos.", tool_call_id="1"),
+                                 AIMessage(content="Reservé todo")]}
+
+    salida = grafo.crear_nodo_especialista("reservas", AgenteSinReserva())(grafo.estado_inicial("x"))
+    assert "No se creó ninguna reserva." in salida["resultados"][0]
+    assert "Reservé todo" not in salida["resultados"][0]

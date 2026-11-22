@@ -20,6 +20,7 @@ from typing_extensions import TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+import datos
 from agentes import agente_clima, agente_presupuesto, agente_reservas, crear_modelo
 from config import MAX_PASOS
 
@@ -58,7 +59,12 @@ Reglas:
 1. Elige solo agentes que la pregunta realmente necesita y que no hayan sido consultados.
 2. Si el usuario quiere reservar con una condición (clima, dinero), consulta primero esos agentes
    y deja "reservas" de último.
-3. Si ya hay información suficiente, o la pregunta no trata de estos temas, responde "fin"."""
+3. Cada tema de la pregunta necesita su agente: clima, lluvia o temperatura -> clima;
+   cuánto cuesta, dinero o presupuesto, si alcanza -> presupuesto.
+   Elige "reservas" SOLO si el usuario pide reservar explícitamente (reserva, reservar, aparta).
+   Si solo pregunta por clima o costo, NUNCA elijas "reservas".
+   No respondas "fin" mientras quede un tema de la pregunta sin cubrir.
+4. Si ya hay información suficiente, o la pregunta no trata de estos temas, responde "fin"."""
 
 PROMPT_SINTETIZADOR = """Eres el asistente final de un planeador de salidas de fin de semana.
 Redacta la respuesta para el usuario usando SOLO los resultados de los agentes.
@@ -81,12 +87,20 @@ def _contexto(estado: EstadoPlaneador) -> str:
 # ----------------------------------------------------------------------------
 # 3. NODOS: funciones que reciben el estado y devuelven SOLO lo que cambian.
 # ----------------------------------------------------------------------------
+def _pide_reservar(pregunta: str) -> bool:
+    """True si el usuario habló de reservar. Crear una reserva tiene efectos, así que el sistema
+    no depende solo del modelo: sin una petición explícita no se llama al agente de reservas."""
+    return "reserv" in datos.normalizar(pregunta)
+
+
 def nodo_supervisor(estado: EstadoPlaneador) -> dict:
     consultados = estado["consultados"]
     if len(consultados) >= MAX_PASOS:  # límite de autonomía
         return {"siguiente": "fin"}
+    pendientes = [a for a in ("clima", "presupuesto", "reservas") if a not in consultados]
     mensaje = (_contexto(estado) +
-               f"\n\nAgentes ya consultados: {', '.join(consultados) or 'ninguno'}")
+               f"\n\nAgentes ya consultados: {', '.join(consultados) or 'ninguno'}" +
+               f"\nAgentes que todavía puedes elegir: {', '.join(pendientes) or 'ninguno'} (o 'fin')")
     try:
         decision = modelo_supervisor.invoke([("system", PROMPT_SUPERVISOR), ("human", mensaje)])
         siguiente = decision.siguiente
@@ -96,16 +110,33 @@ def nodo_supervisor(estado: EstadoPlaneador) -> dict:
         siguiente = "fin"
     if siguiente in consultados:  # evita ciclos infinitos
         siguiente = "fin"
+    if siguiente == "reservas" and not _pide_reservar(estado["pregunta"]):
+        print("  [supervisor] el usuario no pidió reservar; se pasa a la respuesta final")
+        siguiente = "fin"
     return {"siguiente": siguiente}
 
 
 def crear_nodo_especialista(nombre: str, agente):
-    """Fábrica de nodos: envuelve un agente (create_agent) como nodo del grafo."""
+    """Fábrica de nodos: envuelve un agente (create_agent) como nodo del grafo.
+
+    Lo que se guarda en el estado son, siempre que existan, los resultados de las HERRAMIENTAS
+    (ToolMessage): son datos producidos por código. El texto que redacta un modelo pequeño puede
+    parafrasear mal o inventar (por ejemplo cambiar "5 %" por "poca lluvia"). Si el agente no usó
+    ninguna herramienta, se guarda su texto."""
     def nodo(estado: EstadoPlaneador) -> dict:
         resultado = agente.invoke({"messages": [{"role": "user", "content": _contexto(estado)}]})
-        texto = resultado["messages"][-1].content
+        mensajes = resultado["messages"]
+        texto = mensajes[-1].content
+        datos_herramientas = [m.content for m in mensajes
+                              if getattr(m, "type", "") == "tool"
+                              and getattr(m, "status", "success") != "error"]
+        if nombre == "reservas" and not any(d.startswith("Reserva confirmada") for d in datos_herramientas):
+            datos_herramientas.append("No se creó ninguna reserva.")
         print(f"  [{nombre}] {texto}")
-        return {"resultados": [f"[{nombre}] {texto}"], "consultados": [nombre]}
+        if datos_herramientas:
+            print(f"  [{nombre}] datos de las herramientas: {' | '.join(datos_herramientas)}")
+        guardado = " ".join(datos_herramientas) if datos_herramientas else texto
+        return {"resultados": [f"[{nombre}] {guardado}"], "consultados": [nombre]}
     return nodo
 
 
