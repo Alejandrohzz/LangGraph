@@ -15,7 +15,10 @@ import io
 import re
 import sys
 import time
+import uuid
 from pathlib import Path
+
+from langgraph.types import Command
 
 import datos
 
@@ -43,9 +46,10 @@ def verificar_1(resp, consultados, reservas):
 
 def verificar_2(resp, consultados, reservas):
     t = sin_miles(resp)
+    # "faltan" + monto: buscar solo "50000" daba un falso positivo (la entrada de Zipaquirá cuesta $50.000).
     return [("llamó solo a presupuesto", consultados == ["presupuesto"]),
             ("costo $400.000", "400000" in t),
-            ("faltan $50.000", "50000" in t)]
+            ("faltan $50.000", re.search(r"faltan\s*\$?\s*50000(?!\d)", t, re.IGNORECASE) is not None)]
 
 
 def verificar_3(resp, consultados, reservas):
@@ -61,7 +65,7 @@ def verificar_4(resp, consultados, reservas):
     return [("llamó a clima, presupuesto y reservas", sorted(consultados) == ["clima", "presupuesto", "reservas"]),
             ("dice 15 %", tiene_porcentaje(resp, 15)),
             ("costo $210.000", "210000" in t),
-            ("sobran $40.000", "40000" in t),
+            ("sobran $40.000", re.search(r"sobran\s*\$?\s*40000(?!\d)", t, re.IGNORECASE) is not None),
             ("creó exactamente 1 reserva", len(reservas) == 1),
             ("muestra el código RES-", "RES-" in resp)]
 
@@ -69,13 +73,14 @@ def verificar_4(resp, consultados, reservas):
 def verificar_5(resp, consultados, reservas):
     t = sin_miles(resp)
     return [("llamó a presupuesto", "presupuesto" in consultados),
-            ("faltan $60.000", "60000" in t),
+            ("faltan $60.000", re.search(r"faltan\s*\$?\s*60000(?!\d)", t, re.IGNORECASE) is not None),
             ("NO creó ninguna reserva", len(reservas) == 0)]
 
 
 def verificar_6(resp, consultados, reservas):
     return [("no llamó a ningún especialista", consultados == []),
-            ("no creó reservas", len(reservas) == 0)]
+            ("no creó reservas", len(reservas) == 0),
+            ("explica que solo ayuda con salidas de fin de semana", "fin de semana" in resp.lower())]
 
 
 PREGUNTAS = [
@@ -108,6 +113,17 @@ def reiniciar_datos() -> None:
     datos.RESERVAS.clear()
 
 
+def invocar_con_confirmacion(app, estado_inicial, pregunta) -> dict:
+    """Ejecuta el grafo. Si se pausa pidiendo confirmación (reto Parte 7), responde "sí" automáticamente:
+    es el modo de pruebas, equivale a un usuario que acepta. La pausa queda registrada en la traza."""
+    config = {"configurable": {"thread_id": uuid.uuid4().hex}}
+    estado = app.invoke(estado_inicial(pregunta), config)
+    while estado.get("__interrupt__"):
+        print("  [humano] (automático) la reserva pide confirmación -> se responde: sí")
+        estado = app.invoke(Command(resume="sí"), config)
+    return estado
+
+
 def ejecutar_una(numero, pregunta, verificador, app, estado_inicial) -> dict:
     reiniciar_datos()
     print(f"\n=== Pregunta {numero}: {pregunta}")
@@ -116,7 +132,7 @@ def ejecutar_una(numero, pregunta, verificador, app, estado_inicial) -> dict:
     error, estado = None, {}
     with contextlib.redirect_stdout(tee):
         try:
-            estado = app.invoke(estado_inicial(pregunta))
+            estado = invocar_con_confirmacion(app, estado_inicial, pregunta)
         except Exception as e:  # no se oculta: queda en la bitácora
             error = f"{type(e).__name__}: {e}"
     segundos = time.perf_counter() - inicio

@@ -50,7 +50,7 @@ def test_informe_se_guarda_aunque_se_interrumpa(tmp_path):
         def __init__(self):
             self.n = 0
 
-        def invoke(self, _estado):
+        def invoke(self, _estado, _config=None):
             self.n += 1
             if self.n == 2:
                 raise KeyboardInterrupt
@@ -61,3 +61,40 @@ def test_informe_se_guarda_aunque_se_interrumpa(tmp_path):
     resultados = ep.ejecutar_todas(elegidas, AppFalsa(), lambda q: {}, ruta)
     assert len(resultados) == 1 and ruta.exists()
     assert "Pregunta 1" in ruta.read_text(encoding="utf-8")
+
+
+def test_pregunta_2_no_se_deja_enganar_por_la_entrada_de_50000():
+    # Falso positivo detectado en la Parte 5: "$50.000" aparece como entrada, pero no dice "faltan".
+    resp = "Costo total $400.000 (entrada $50.000). No alcanza."
+    assert not ok(ep.verificar_2(resp, ["presupuesto"], []))
+
+
+def test_pregunta_4_y_5_exigen_sobran_y_faltan_con_su_monto():
+    r4 = "15 % de lluvia. Costo $210.000. Reserva RES-001."
+    assert not ok(ep.verificar_4(r4, ["clima", "presupuesto", "reservas"], [{"codigo": "RES-001"}]))
+    assert not ok(ep.verificar_5("Cuesta $210.000 y tienen $150.000.", ["presupuesto"], []))
+
+
+def test_pregunta_6_exige_explicar_el_alcance():
+    assert not ok(ep.verificar_6("No hay resultados.", [], []))
+
+
+def test_invocar_con_confirmacion_responde_si_automaticamente():
+    from langgraph.types import Command
+
+    class Interrupcion:
+        value = {"mensaje": "¿Confirmas?"}
+
+    class AppPausada:
+        def __init__(self):
+            self.entradas = []
+
+        def invoke(self, entrada, config=None):
+            self.entradas.append(entrada)
+            if not isinstance(entrada, Command):
+                return {"__interrupt__": [Interrupcion()]}
+            return {"respuesta_final": "ok", "consultados": ["reservas"]}
+
+    app = AppPausada()
+    estado = ep.invocar_con_confirmacion(app, lambda q: {"pregunta": q}, "reserva Suesca")
+    assert estado["respuesta_final"] == "ok" and app.entradas[1].resume == "sí"

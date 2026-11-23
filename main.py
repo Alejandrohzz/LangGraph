@@ -27,7 +27,8 @@ def main() -> None:
         if not pregunta:
             continue
         inicio = time.perf_counter()
-        respuesta = planear(pregunta)
+        # Si el grafo se pausa para pedir confirmación de una reserva, se la mostramos y leemos la respuesta.
+        respuesta = planear(pregunta, confirmar=lambda aviso: input(f"\n{aviso}\nTú: ").strip())
         segundos = time.perf_counter() - inicio
         print(f"\nPlaneador ({segundos:.0f} s):\n{respuesta}")
 

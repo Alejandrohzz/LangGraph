@@ -4,17 +4,17 @@ Verificación automática = ayuda; las observaciones se completan a mano.
 
 | # | Agentes que llamó el supervisor | ¿Respuesta correcta? (auto) | Tiempo (s) | Observaciones |
 |---|---|---|---|---|
-| 1 | clima | Sí | 46 |  |
-| 2 | presupuesto | Sí | 50 |  |
-| 3 | clima, presupuesto | Sí | 73 |  |
-| 4 | clima, presupuesto, reservas | Sí | 95 |  |
-| 5 | presupuesto, clima | Sí | 81 |  |
-| 6 | clima, presupuesto | No / revisar | 45 | Falló: no llamó a ningún especialista |
+| 1 | clima | Sí | 245 |  |
+| 2 | presupuesto | Sí | 95 |  |
+| 3 | clima, presupuesto | Sí | 72 |  |
+| 4 | clima, presupuesto, reservas | Sí | 142 |  |
+| 5 | presupuesto | Sí | 53 |  |
+| 6 | ninguno | Sí | 0 |  |
 
 ## Pregunta 1
 **Pregunta:** ¿Cómo estará el clima en Guatavita el domingo?
 
-**Respuesta final:** El domingo en Guatavita será lluvioso con temperaturas entre 7°C y 15°C. La probabilidad de lluvia es del 80%. No se recomienda viajar sin previa confirmación de condiciones climáticas.
+**Respuesta final:** El domingo en Guatavita será lluvioso con una temperatura entre 7 °C y 15 °C y una probabilidad de lluvia del 80 %. No se recomienda viajar si no tienes planes de lluvia.
 
 Datos verificados por las herramientas:
 - [clima] Laguna de Guatavita el domingo: lluvioso, entre 7 °C y 15 °C, probabilidad de lluvia 80 %.
@@ -27,7 +27,7 @@ Datos verificados por las herramientas:
 **Traza:**
 ```
 [supervisor] -> clima (La pregunta es sobre el clima en Guatavita el domingo, por lo que el agente de clima es el más relevante para esta consulta.)
-  [clima] Es probable que lueva en Guatavita el domingo. Recomiendo llevar una chaqueta ligera.
+  [clima] Es recomendable llevar una chaqueta ligera y una billetera de plástico.
   [clima] datos de las herramientas: Laguna de Guatavita el domingo: lluvioso, entre 7 °C y 15 °C, probabilidad de lluvia 80 %.
   [supervisor] -> clima (La pregunta específica del usuario era sobre el clima en Guatavita el domingo.)
 ```
@@ -35,7 +35,7 @@ Datos verificados por las herramientas:
 ## Pregunta 2
 **Pregunta:** Somos 4 amigos con 350000 pesos. ¿Nos alcanza para ir a Zipaquirá?
 
-**Respuesta final:** No alcanza con el presupuesto de $350.000. Falta $50.000. La tarifa total para 4 personas sería de $400.000.
+**Respuesta final:** No alcanza. Presupuesto $350.000 - costo $400.000 = faltan $50.000.
 
 Datos verificados por las herramientas:
 - [presupuesto] Catedral de Sal de Zipaquirá: por persona transporte $20.000 + entrada $50.000 + alimentación $30.000 = $100.000. Costo total para 4 personas: $400.000. No alcanza: presupuesto $350.000 - costo $400.000 = faltan $50.000.
@@ -48,7 +48,8 @@ Datos verificados por las herramientas:
 **Traza:**
 ```
 [supervisor] -> presupuesto (El usuario preguntó sobre el presupuesto y aún no se ha realizado ninguna reserva.)
-  [presupuesto] Costo total: $400.000. Faltan $50.000.
+  [presupuesto] el agente no llamó a calcular_saldo; el sistema ejecutó la tool
+  [presupuesto] Hazlo tú mismo: calcular_saldo(presupuesto=350000, costo_total=400000)
   [presupuesto] datos de las herramientas: Catedral de Sal de Zipaquirá: por persona transporte $20.000 + entrada $50.000 + alimentación $30.000 = $100.000. Costo total para 4 personas: $400.000. | No alcanza: presupuesto $350.000 - costo $400.000 = faltan $50.000.
   [supervisor] -> presupuesto (El presupuesto es insuficiente para el costo total de la visita a Zipaquirá.)
 ```
@@ -56,7 +57,7 @@ Datos verificados por las herramientas:
 ## Pregunta 3
 **Pregunta:** Somos 2 y queremos ir a Villa de Leyva el sábado. ¿Cómo estará el clima y cuánto nos cuesta?
 
-**Respuesta final:** El clima para Villa de Leyva el sábado estará soleado con una temperatura entre 12°C y 25°C y una probabilidad de lluvia del 5%. El costo total para 2 personas será de $230.000, que incluye transporte de $70.000 por persona, entrada gratuita y alimentación de $45.000 por persona. No se requieren reservas para este destino.
+**Respuesta final:** El clima para Villa de Leyva el sábado será soleado con una temperatura entre 12 °C y 25 °C y una probabilidad de lluvia del 5 %. El costo total para 2 personas será de $230.000.
 
 Datos verificados por las herramientas:
 - [clima] Villa de Leyva el sabado: soleado, entre 12 °C y 25 °C, probabilidad de lluvia 5 %.
@@ -82,7 +83,9 @@ Datos verificados por las herramientas:
 ## Pregunta 4
 **Pregunta:** Somos 3 y tenemos 250000. Si no llueve mucho y nos alcanza, reserva Suesca para el sábado a nombre de Laura.
 
-**Respuesta final:** Sobran $40.000. Reserva confirmada para Laura para el sábado en Rocas de Suesca. Código de reserva: RES-001.
+**Respuesta final:** Rocas de Suesca el sábado: soleado, entre 7 °C y 21 °C, probabilidad de lluvia 15 %.  
+Costo total para 3 personas: $210.000. Sobran $40.000 del presupuesto $250.000.  
+Reserva confirmada: RES-001, Rocas de Suesca, sábado, 3 personas, a nombre de Laura.
 
 Datos verificados por las herramientas:
 - [clima] Rocas de Suesca el sabado: soleado, entre 7 °C y 21 °C, probabilidad de lluvia 15 %.
@@ -106,19 +109,19 @@ Datos verificados por las herramientas:
   [presupuesto] Costo total: $210.000. Sobran $40.000.
   [presupuesto] datos de las herramientas: Rocas de Suesca: por persona transporte $25.000 + entrada $15.000 + alimentación $30.000 = $70.000. Costo total para 3 personas: $210.000. | Sí alcanza: presupuesto $250.000 - costo $210.000 = sobran $40.000.
   [supervisor] -> reservas (El usuario pidió reservar Suesca para el sábado a nombre de Laura. Los resultados de los otros agentes son suficientes para responder a esta solicitud.)
-  [reservas] RES-001: Rocas de Suesca, sábado, 3 personas, a nombre de Laura.
+  [humano] (automático) la reserva pide confirmación -> se responde: sí
+  [humano] confirmó la reserva
+  [reservas] La reserva para Rocas de Suesca para el sábado a nombre de Laura se ha confirmado con el código de reserva RES-001.
   [reservas] datos de las herramientas: Rocas de Suesca el sabado: quedan 8 cupos. | Reserva confirmada RES-001: Rocas de Suesca, sabado, 3 personas, a nombre de Laura.
 ```
 
 ## Pregunta 5
 **Pregunta:** Somos 3 con 150000. Si nos alcanza, reserva Suesca el domingo a nombre de Laura.
 
-**Respuesta final:** No se pudo hacer la reserva para Suesca el domingo. El costo total para 3 personas sería de $210.000, mientras que el presupuesto disponible es de $150.000. Faltarían $60.000. Además, la probabilidad de lluvia es del 70%, lo que no es factible para una salida de fin de semana.
+**Respuesta final:** Costo total para 3 personas en Suesca: $210.000. Falta $60.000. No se puede hacer la reserva.
 
 Datos verificados por las herramientas:
 - [presupuesto] Rocas de Suesca: por persona transporte $25.000 + entrada $15.000 + alimentación $30.000 = $70.000. Costo total para 3 personas: $210.000. No alcanza: presupuesto $150.000 - costo $210.000 = faltan $60.000.
-- [clima] Rocas de Suesca el domingo: tormentas en la tarde, entre 8 °C y 17 °C, probabilidad de lluvia 70 %.
-- [sistema] No se creó ninguna reserva porque el presupuesto no alcanza.
 
 **Verificaciones:**
 - ✅ llamó a presupuesto
@@ -131,30 +134,20 @@ Datos verificados por las herramientas:
   [presupuesto] Costo total: $210.000. Faltan $60.000.
   [presupuesto] datos de las herramientas: Rocas de Suesca: por persona transporte $25.000 + entrada $15.000 + alimentación $30.000 = $70.000. Costo total para 3 personas: $210.000. | No alcanza: presupuesto $150.000 - costo $210.000 = faltan $60.000.
   [supervisor] -> clima (Necesitamos información sobre el clima para el domingo en Suesca.)
-  [clima] La recomendación es llevar una chaqueta ligera y una mochila impermeable.
-  [clima] datos de las herramientas: Rocas de Suesca el domingo: tormentas en la tarde, entre 8 °C y 17 °C, probabilidad de lluvia 70 %.
-  [supervisor] -> reservas (El presupuesto para el costo total de la reserva ($210.000) no alcanza ($150.000 - $210.000 = $60.000 faltantes). Por lo tanto, se necesita reservar y confirmar la disponibilidad de las fechas.)
-  [supervisor] el presupuesto no alcanza; NO se llama al agente de reservas
+  [supervisor] el usuario no preguntó por el clima; se pasa a la respuesta final
 ```
 
 ## Pregunta 6
 **Pregunta:** ¿Quién ganó el mundial de 2022?
 
-**Respuesta final:** No tengo información sobre los resultados del Mundial de 2022. ¿Podemos cambiar de tema y ayudarte con algo relacionado a Guatavita, Zipaquirá, Villa de Leyva, Suesca y Chicaque? Estos lugares ofrecen diversas opciones para salidas de fin de semana.
-
-Datos verificados por las herramientas:
-- [clima] No tengo información sobre los resultados del Mundial de 2022. ¿Te puedo ayudar con algo relacionado al clima?
-- [presupuesto] No, no tengo información sobre los resultados del Mundial de 2022.
+**Respuesta final:** Solo puedo ayudarte a planear salidas de fin de semana cerca de Bogotá: consultar el clima, calcular costos y presupuesto, y reservar cupos en Guatavita, Zipaquirá, Villa de Leyva, Suesca y Chicaque. Con esa pregunta no puedo ayudarte; si quieres, cuéntame a qué destino quieres ir.
 
 **Verificaciones:**
-- ❌ no llamó a ningún especialista
+- ✅ no llamó a ningún especialista
 - ✅ no creó reservas
+- ✅ explica que solo ayuda con salidas de fin de semana
 
 **Traza:**
 ```
-[supervisor] -> clima (La pregunta del usuario es sobre un tema que no requiere de los agentes clima, presupuesto o reservas.)
-  [clima] No tengo información sobre los resultados del Mundial de 2022. ¿Te puedo ayudar con algo relacionado al clima?
-  [supervisor] -> presupuesto (La pregunta del usuario es sobre el resultado del Mundial de 2022, no sobre clima, presupuesto o reservas. No hay información suficiente para responder. Ahora consultaré al agente presupuesto para asegurarme de que el dinero alcanza.)
-  [presupuesto] No, no tengo información sobre los resultados del Mundial de 2022.
-  [supervisor] -> presupuesto (El usuario no pidió información sobre el clima, solo sobre el resultado del Mundial de 2022. El presupuesto tampoco tiene información relevante. Ahora consultaremos si el costo del plan para un grupo alcanza.)
+[supervisor] pregunta fuera de tema; se responde sin consultar especialistas
 ```

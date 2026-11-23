@@ -22,3 +22,7 @@ MAX_PASOS = 3
 # Los modelos pequeños a veces omiten cifras al redactar (p. ej. el % de lluvia); este bloque las
 # garantiza porque sale directo del código, no del modelo. Ponlo en False para respuestas más cortas.
 MOSTRAR_DATOS_VERIFICADOS = True
+
+# Reto de la Parte 7 (human-in-the-loop): si es True, el grafo se PAUSA antes de crear una reserva y
+# espera que el usuario confirme con "sí" o "no". Ponlo en 0 (CONFIRMAR_RESERVAS=0) para desactivarlo.
+CONFIRMAR_RESERVAS = os.getenv("CONFIRMAR_RESERVAS", "1") != "0"
